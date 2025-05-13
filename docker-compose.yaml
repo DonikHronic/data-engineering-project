@@ -1,0 +1,84 @@
+services:
+  prefect:
+    container_name: prefect
+    image: prefecthq/prefect:3-latest
+    command: prefect server start --host 0.0.0.0
+    ports:
+      - "4200:4200"
+    networks:
+      - data-engineering-network
+  kafka:
+    container_name: kafka
+    image: apache/kafka:3.7.1
+    ports:
+      - "9092:9092"
+      - "19092:19092"
+    networks:
+      - data-engineering-network
+    environment:
+      KAFKA_HOST: kafka
+      KAFKA_PORT: 19092
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT_HOST://localhost:9092,PLAINTEXT://kafka:19092"
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:29093"
+      KAFKA_LISTENERS: "CONTROLLER://:29093,PLAINTEXT_HOST://:9092,PLAINTEXT://:19092"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_LOG_DIRS: "/tmp/kraft-combined-logs"
+  kafka-ui:
+    container_name: kafka-ui
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - "8000:8080"
+    networks:
+      - data-engineering-network
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_CLUSTERS_0_NAME: kafka
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:19092
+      SERVER_SERVLET_CONTEXT_PATH: /kafka-ui
+  spark:
+    container_name: spark
+    image: bitnami/spark
+    ports:
+      - "8080:8080"
+    networks:
+      - data-engineering-network
+    environment:
+      - SPARK_MODE=master
+  spark-worker:
+    container_name: spark-worker
+    image: bitnami/spark
+    networks:
+      - data-engineering-network
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark:7077
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_WORKER_CORES=1
+  minio:
+    image: minio/minio
+    container_name: minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: "minioadmin"
+      MINIO_ROOT_PASSWORD: "minioadmin"
+      MINIO_WEBUI_PORT: "9001"
+    volumes:
+      - minio-data:/data
+    command: server --address ":9000" --console-address ":9001" /data
+
+networks:
+  data-engineering-network:
+
+volumes:
+  minio-data:
