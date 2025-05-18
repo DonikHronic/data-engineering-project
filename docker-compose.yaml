@@ -66,6 +66,8 @@ services:
   minio:
     image: minio/minio
     container_name: minio
+    networks:
+      - data-engineering-network
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -76,6 +78,19 @@ services:
     volumes:
       - minio-data:/data
     command: server --address ":9000" --console-address ":9001" /data
+  web-server:
+    build:
+      context: .
+    container_name: web-server
+    ports:
+      - "8888:8888"
+    networks:
+      - data-engineering-network
+    depends_on:
+      - kafka
+      - minio
+    volumes:
+      - ./static:/app/static
 
 networks:
   data-engineering-network:

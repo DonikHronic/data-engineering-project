@@ -1,5 +1,6 @@
 import json
 from contextlib import asynccontextmanager
+from datetime import datetime
 from threading import Thread, Lock
 from typing import List, Dict, Any
 
@@ -12,6 +13,8 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from kafka import KafkaConsumer
 
+from data_processing_pipeline import data_processing_workflow
+
 data_lock = Lock()
 data_records: List[Dict[Any, Any]] = []
 
@@ -20,7 +23,7 @@ def consume_kafka():
     try:
         consumer = KafkaConsumer(
             "processing-topic",
-            bootstrap_servers=["0.0.0.0:9092"],
+            bootstrap_servers=["kafka:19092"],
             auto_offset_reset="earliest",
             value_deserializer=lambda x: json.loads(x.decode("utf-8")),
             group_id="fastapi-consumer",
@@ -31,7 +34,7 @@ def consume_kafka():
             with data_lock:
                 data_records.append(data)
                 # Keep only the last 100 records to prevent memory issues
-                if len(data_records) > 100:
+                if len(data_records) > 1000000:
                     data_records.pop(0)
     except Exception as e:
         print(f"Kafka consumer error: {e}")
@@ -95,7 +98,7 @@ async def root(request: Request):
 
     # Chart 3: Any other numeric columns
     numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
-    if len(numeric_cols) > 0 and set(numeric_cols) != set(["mid", "high", "low"]):
+    if len(numeric_cols) > 0 and set(numeric_cols) != {"mid", "high", "low"}:
         other_cols = [col for col in numeric_cols if col not in ["mid", "high", "low"]]
         if other_cols:
             fig3 = px.line(df, y=other_cols, title="Other Metrics Over Time")
@@ -117,7 +120,7 @@ async def root(request: Request):
         <body>
             <h1>Real-time Kafka Data Visualization</h1>
             <div class="data-info">
-                <p>Displaying data from {len(local_data)} records | Last updated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                <p>Displaying data from {len(local_data)} records | Last updated: {datetime.now().isoformat()}</p>
                 <p>Data will refresh automatically every 10 seconds</p>
             </div>
             <div class="chart-container">
@@ -135,8 +138,14 @@ async def get_data():
     with data_lock:
         return {"data": data_records}
 
+@web_app.get("/run-processing")
+async def run_processing():
+    """API endpoint to trigger data processing"""
+    # Placeholder for processing logic
+    data_processing_workflow()
+
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(web_app, host="0.0.0.0", port=8000)
+    uvicorn.run(web_app, host="0.0.0.0", port=8888)

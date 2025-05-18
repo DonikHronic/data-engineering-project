@@ -33,11 +33,11 @@ def ingest_data(df: DataFrame):
     It uses the KafkaProducer to send messages to the topic.
     """
     producer = KafkaProducer(
-        bootstrap_servers=["0.0.0.0:9092"],
+        bootstrap_servers=["kafka:19092"],
         value_serializer=lambda v: json.dumps(v).encode("utf-8"),
     )
 
-    df = df.head(1)
+    df = df.head(1000)  # Limit to 1000 records for testing
 
     for record in df.iterrows():
         print("PUBLISHING")
@@ -53,7 +53,7 @@ def ingest_data(df: DataFrame):
 def store_data():
     consumer = KafkaConsumer(
         "ingestion-topic",
-        bootstrap_servers=["0.0.0.0:9092"],
+        bootstrap_servers=["kafka:19092"],
         group_id="1",
         auto_offset_reset="earliest",
         value_deserializer=lambda x: json.loads(x.decode("utf-8")),
@@ -75,7 +75,7 @@ def store_data():
     temp_df.to_csv(temp_file, index=False)
 
     client = Minio(
-        "0.0.0.0:9000", access_key="minioadmin", secret_key="minioadmin", secure=False
+        "minio:9000", access_key="minioadmin", secret_key="minioadmin", secure=False
     )
 
     bucket_name = "ingestion-bucket"
@@ -111,7 +111,7 @@ def send_to_processing(stored_file: str):
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
         .config("spark.hadoop.fs.s3a.access.key", "minioadmin")
         .config("spark.hadoop.fs.s3a.secret.key", "minioadmin")
-        .config("spark.hadoop.fs.s3a.endpoint", "http://localhost:9000")
+        .config("spark.hadoop.fs.s3a.endpoint", "http://minio:9000")
         .config("spark.hadoop.fs.s3a.path.style.access", "true")
         .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false")
         .getOrCreate()
@@ -120,7 +120,7 @@ def send_to_processing(stored_file: str):
     # Read data from MinIO
     # minio_path = f"s3a://ingestion-bucket/{stored_file}"
     client = Minio(
-        "0.0.0.0:9000", access_key="minioadmin", secret_key="minioadmin", secure=False
+        "minio:9000", access_key="minioadmin", secret_key="minioadmin", secure=False
     )
     client.fget_object("ingestion-bucket", stored_file, "/tmp/temp_data.csv")
 
@@ -151,7 +151,7 @@ def send_processed_to_kafka(processed_minio_path):
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
         .config("spark.hadoop.fs.s3a.access.key", "minioadmin")
         .config("spark.hadoop.fs.s3a.secret.key", "minioadmin")
-        .config("spark.hadoop.fs.s3a.endpoint", "http://localhost:9000")
+        .config("spark.hadoop.fs.s3a.endpoint", "http://minio:9000")
         .config("spark.hadoop.fs.s3a.path.style.access", "true")
         .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false")
         .getOrCreate()
@@ -163,7 +163,7 @@ def send_processed_to_kafka(processed_minio_path):
 
     # Initialize Kafka producer
     producer = KafkaProducer(
-        bootstrap_servers=["0.0.0.0:9092"],
+        bootstrap_servers=["kafka:19092"],
         value_serializer=lambda v: json.dumps(v, default=str).encode("utf-8"),
     )
 
@@ -189,7 +189,7 @@ def data_processing_workflow():
     stored_data = store_data()
 
     # Creation of MinIO bucket for processed data
-    client = Minio("0.0.0.0:9000", access_key="minioadmin", secret_key="minioadmin", secure=False)
+    client = Minio("minio:9000", access_key="minioadmin", secret_key="minioadmin", secure=False)
     if not client.bucket_exists("processed-bucket"):
         client.make_bucket("processed-bucket")
     print("Bucket 'processed-bucket' is ready")
