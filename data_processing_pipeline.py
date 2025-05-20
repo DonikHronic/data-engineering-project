@@ -37,7 +37,7 @@ def ingest_data(df: DataFrame):
         value_serializer=lambda v: json.dumps(v).encode("utf-8"),
     )
 
-    df = df.head(1000)  # Limit to 1000 records for testing
+    df = df.head(1000000)  # Limit to 1000 records for testing
 
     for record in df.iterrows():
         print("PUBLISHING")
